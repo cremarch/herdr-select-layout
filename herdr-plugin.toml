@@ -1,0 +1,49 @@
+# tmux select-layout for herdr. Bind the actions with type = "plugin_action" (README.md).
+id = "cremarch.select-layout"
+name = "Select Layout"
+version = "0.1.0"
+min_herdr_version = "0.9.5"
+description = "tmux select-layout for herdr: even, main and tiled layouts, next and spread"
+platforms = ["macos", "linux"]
+
+[[actions]]
+id = "even-horizontal"
+title = "Layout: even horizontal (one row)"
+contexts = ["pane"]
+command = ["./select-layout", "even-horizontal"]
+
+[[actions]]
+id = "even-vertical"
+title = "Layout: even vertical (one column)"
+contexts = ["pane"]
+command = ["./select-layout", "even-vertical"]
+
+[[actions]]
+id = "main-horizontal"
+title = "Layout: main horizontal (main pane on top)"
+contexts = ["pane"]
+command = ["./select-layout", "main-horizontal"]
+
+[[actions]]
+id = "main-vertical"
+title = "Layout: main vertical (main pane on the left)"
+contexts = ["pane"]
+command = ["./select-layout", "main-vertical"]
+
+[[actions]]
+id = "tiled"
+title = "Layout: tiled (grid, wider than tall)"
+contexts = ["pane"]
+command = ["./select-layout", "tiled"]
+
+[[actions]]
+id = "next"
+title = "Layout: next"
+contexts = ["pane"]
+command = ["./select-layout", "next"]
+
+[[actions]]
+id = "spread"
+title = "Layout: spread panes evenly"
+contexts = ["pane"]
+command = ["./select-layout", "spread"]

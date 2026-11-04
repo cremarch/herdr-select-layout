@@ -1,0 +1,93 @@
+#!/usr/bin/env perl
+# select-layout MODE [--tab TAB_ID] [--config PATH] [--socket PATH]
+#
+# Entry point of the herdr plugin actions. See README.md and lib/Herdr/SelectLayout.pm.
+use strict;
+use warnings;
+use FindBin ();
+use lib "$FindBin::RealBin/lib";
+use Fcntl qw(:flock);
+use File::Spec ();
+use Getopt::Long qw(GetOptionsFromArray);
+use Herdr::SelectLayout ();
+use Herdr::SelectLayout::Config ();
+use Herdr::SelectLayout::Client ();
+
+exit main(@ARGV);
+
+sub usage {
+    return <<"EOF";
+usage: select-layout MODE [--tab TAB_ID] [--config PATH] [--socket PATH]
+
+MODE
+  even-horizontal  all panes in one row, equal widths          (tmux prefix M-1)
+  even-vertical    all panes in one column, equal heights      (tmux prefix M-2)
+  main-horizontal  main pane on top, the others in a row       (tmux prefix M-3)
+  main-vertical    main pane on the left, the others stacked   (tmux prefix M-4)
+  tiled            grid, never taller than wide                (tmux prefix M-5)
+  next             the layout after the current one            (tmux prefix Space)
+  spread           keep the arrangement, equalize sizes        (tmux prefix E)
+
+The tab defaults to HERDR_TAB_ID (set by herdr for plugin actions), else the
+focused pane's tab. Settings are read from --config, else
+\$HERDR_PLUGIN_CONFIG_DIR/config.toml (see README.md).
+EOF
+}
+
+sub main {
+    my @args = @_;
+    my %opt;
+    GetOptionsFromArray(\@args, \%opt, 'tab=s', 'config=s', 'socket=s', 'help|h', 'version')
+        or return fail_usage();
+    if ($opt{help})    { print usage(); return 0 }
+    if ($opt{version}) { print "select-layout $Herdr::SelectLayout::VERSION\n"; return 0 }
+
+    my $mode = shift @args;
+    return fail_usage() unless defined $mode && !@args && Herdr::SelectLayout::is_mode($mode);
+
+    my $client = eval { Herdr::SelectLayout::Client->new(socket_path => $opt{socket}) }
+        or return fail($@);
+    my $config = eval {
+        Herdr::SelectLayout::Config->load(
+            $opt{config} // Herdr::SelectLayout::Config->path_in($ENV{HERDR_PLUGIN_CONFIG_DIR}));
+    } or return fail($@, $client);
+
+    my $ok = eval {
+        my $tab = $opt{tab} || $ENV{HERDR_TAB_ID} || $client->request('pane.current', {})->{pane}{tab_id};
+        if (my $lock = lock_tab($tab)) {
+            Herdr::SelectLayout->new(client => $client, tab_id => $tab, config => $config)->run($mode);
+        }
+        1;
+    };
+    return $ok ? 0 : fail($@, $client);
+}
+
+# Pressing the key again while panes are parked would park them a second time, so
+# runs on the same tab are serialized: a run that finds the lock taken does nothing.
+# Returns the held handle, or undef when the lock is taken.
+sub lock_tab {
+    my ($tab) = @_;
+    my $dir = $ENV{HERDR_PLUGIN_STATE_DIR} || File::Spec->tmpdir;
+    (my $name = "select-layout-$tab.lock") =~ s/[^\w.-]/_/g;
+    open my $fh, '>', File::Spec->catfile($dir, $name)
+        or return \1;    # cannot lock: run unlocked rather than not at all
+    return flock($fh, LOCK_EX | LOCK_NB) ? $fh : undef;
+}
+
+sub fail_usage {
+    print STDERR usage();
+    return 2;
+}
+
+# The message goes to stderr (herdr keeps it in the plugin log) and, when herdr is
+# reachable, to a toast so that a failed key press is not silent.
+sub fail {
+    my ($error, $client) = @_;
+    chomp $error;
+    print STDERR "select-layout: $error\n";
+    eval {
+        $client->request('notification.show',
+            { title => 'select-layout failed', body => $error, sound => 'none' });
+    } if $client;
+    return 1;
+}
