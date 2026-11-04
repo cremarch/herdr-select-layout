@@ -3,6 +3,8 @@
 A [herdr](https://herdr.dev/) plugin that rearranges the panes of a tab like tmux's
 `select-layout`, with one key.
 
+![demo: tiled, even-horizontal, even-vertical, main-vertical, main-horizontal, then next twice](docs/demo.gif)
+
 | Action | tmux | Result |
 |---|---|---|
 | `even-horizontal` | `prefix M-1` | all panes in one row, equal widths |
